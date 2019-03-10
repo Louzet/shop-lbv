@@ -1,0 +1,77 @@
+version: '3'
+services:
+
+  #PHP Service
+  php:
+    build:
+      context: .
+      dockerfile: ./docker/php-fpm/Dockerfile
+    tty: true
+    environment:
+      SERVICE_NAME: php
+      SERVICE_TAGS: dev
+    working_dir: /var/www
+    volumes:
+      - ./:/var/www
+      - ./docker/php-fpm/local.ini:/usr/local/etc/php/conf.d/local.ini
+      - ./logs/shop-lbv/:/var/log/shop-lbv:cached
+    networks:
+      - app-network
+
+  nodejs:
+    build:
+      context: .
+      dockerfile: ./docker/nodejs/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - php
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/home/app/
+      - /home/app/node_modules
+
+  #Nginx Service
+  nginx:
+    image: nginx:alpine
+    tty: true
+    ports:
+      - "8888:80"
+    volumes:
+      - ./:/var/www
+      - ./docker/nginx/conf.d/:/etc/nginx/conf.d/
+      - ./logs/nginx/:/var/log/nginx:cached
+    networks:
+      - app-network
+
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    ports:
+      - "8080:80"
+    links:
+      - db
+
+  #MySQL Service
+  db:
+    image: mysql:5.7.22
+    tty: true
+    ports:
+      - "3333:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: 'root'
+      SERVICE_TAGS: dev
+      SERVICE_NAME: mysql
+    volumes:
+      - dbdata:/var/lib/mysql/
+      - ./docker/mysql/my.cnf:/etc/mysql/my.cnf
+    networks:
+      - app-network
+
+#Docker Networks
+networks:
+  app-network:
+    driver: bridge
+#Volumes
+volumes:
+  dbdata:
+    driver: local
